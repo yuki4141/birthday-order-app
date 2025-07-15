@@ -1,65 +1,51 @@
+# app.py
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="慶生訂購小程式", layout="wide")
+st.title("慶生訂購小程式")
 
-st.title("🎂 慶生訂購小程式")
-
-# 預設人數、預算
 people = st.number_input("人數", min_value=1, value=35)
 budget_per_person = st.number_input("每人預算", min_value=1, value=200)
-budget_limit = people * budget_per_person
 
-st.info(f"目前總預算上限： {budget_limit} 元")
+total_budget = people * budget_per_person
+st.write(f"預算上限：{total_budget} 元")
 
-# 建立 session state DataFrame
-if "df" not in st.session_state:
-    st.session_state.df = pd.DataFrame(columns=["品項", "數量", "單價", "小計"])
+# 建立 DataFrame 表單
+df = pd.DataFrame([
+    ["點心", 35, 140],
+    ["飲料", 18, 65],
+    ["飲料", 17, 40]
+], columns=["品項", "數量", "單價"])
 
-# 新增品項表單
-st.subheader("新增品項")
+edited_df = st.data_editor(df, num_rows="dynamic")
 
-with st.form("add_form"):
-    col1, col2, col3 = st.columns(3)
-    name = col1.text_input("品項名稱", "")
-    qty = col2.number_input("數量", min_value=0, value=0, step=1)
-    price = col3.number_input("單價", min_value=0, value=0, step=1)
+# 計算小計
+edited_df["小計"] = edited_df["數量"] * edited_df["單價"]
 
-    submitted = st.form_submit_button("新增品項")
+total = edited_df["小計"].sum()
+st.write(f"總金額：{total} 元")
 
-    if submitted:
-        if name:
-            subtotal = qty * price
-            st.session_state.df = st.session_state.df.append(
-                {
-                    "品項": name,
-                    "數量": qty,
-                    "單價": price,
-                    "小計": subtotal
-                },
-                ignore_index=True
-            )
-            st.success(f"✅ 已新增品項：{name}")
-        else:
-            st.warning("請輸入品項名稱！")
+# 預算比較
+if total > total_budget:
+    st.error(f"⚠️ 超過預算！總金額 {total} 元，大於預算上限 {total_budget} 元")
+else:
+    st.success(f"✅ 預算正常，總金額 {total} 元")
 
-# 顯示目前品項表格
-if not st.session_state.df.empty:
-    st.subheader("目前訂購項目")
-    st.dataframe(
-        st.session_state.df,
-        use_container_width=True
+# 匯出 Excel
+import io
+from openpyxl import Workbook
+
+if st.button("匯出 Excel"):
+    output = io.BytesIO()
+    wb = Workbook()
+    ws = wb.active
+    ws.append(list(edited_df.columns))
+    for row in edited_df.values:
+        ws.append(list(row))
+    wb.save(output)
+    st.download_button(
+        label="下載 Excel",
+        data=output.getvalue(),
+        file_name="order.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-    total = st.session_state.df["小計"].sum()
-    st.markdown(f"## 💰 總金額：{total} 元")
-
-    if total > budget_limit:
-        st.error(f"⚠️ 總金額 {total} 元，超過預算上限 {budget_limit} 元！")
-    else:
-        st.success(f"✅ 總金額 {total} 元，在預算內。")
-
-# 清空按鈕
-if st.button("清空所有品項"):
-    st.session_state.df = pd.DataFrame(columns=["品項", "數量", "單價", "小計"])
-    st.info("✅ 已清空所有品項！")
